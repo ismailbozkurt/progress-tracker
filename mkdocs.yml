@@ -1,0 +1,19 @@
+site_name: My Project Progress Tracker
+site_url: https://ismailbozkurt.github.io/progress-tracker/
+
+repo_url: https://github.com/ismailbozkurt/progress-tracker/
+edit_uri: blob/main/docs/
+nav:
+  - Home: index.md
+  - Project Setup: project_setup.md
+  - Frontend: frontend.md
+  - Backend: backend.md
+
+# Theme configuration (you can use any theme, 'material' is popular)
+theme:
+  name: material
+  custom_dir: overrides # This is where we'll put our custom JS
+
+# Extra JavaScript file to include
+extra_javascript:
+  - javascript/progress.js # Path relative to your docs_dir
