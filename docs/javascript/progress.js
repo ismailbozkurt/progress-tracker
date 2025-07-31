@@ -1,118 +1,102 @@
 // docs/javascript/progress.js
 
 document.addEventListener('DOMContentLoaded', () => {
-  const progressContainer = document.getElementById('progress-dashboard-container');
-  if (!progressContainer) {
-    console.warn("Progress dashboard container not found. Make sure an element with id 'progress-dashboard-container' exists.");
+  const progressDashboardContainer = document.getElementById('progress-dashboard-container');
+
+  // If the main dashboard container is not found, this script should not run on the page.
+  // This script is specifically intended for index.md.
+  if (!progressDashboardContainer) {
+    console.log("Progress dashboard container not found on this page. This script is intended for index.md.");
     return;
   }
 
-  // Define the base URL for your MkDocs site.
-  // For local development (mkdocs serve), this is usually the current origin.
-  // For GitHub Pages, it should be your site_url from mkdocs.yml, e.g., 'https://ismailbozkurt.github.io/progress-tracker/'
-  // We'll try to determine it dynamically for flexibility.
-  const BASE_URL = window.location.origin + window.location.pathname.split('/')[0]; // Adjust for root or sub-path deployment
-  // A more robust way for GitHub Pages would be:
-  // const BASE_URL = 'https://ismailbozkurt.github.io/progress-tracker/';
-  // Or, if deployed to a subfolder like 'progress-tracker':
-  // const BASE_URL = window.location.origin + '/progress-tracker/';
-  // For local testing with mkdocs serve, window.location.origin should be sufficient,
-  // but if your mkdocs.yml has a `site_dir` or `use_directory_urls` configured,
-  // the paths might need to be adjusted. Let's keep it simple for now and rely on relative paths.
+  // Dynamically define the base path of your MkDocs site.
+  // This is essential for constructing URLs to fetch other pages.
+  const getBasePath = () => {
+    const path = window.location.pathname;
+    // If the path starts with '/progress-tracker/', it's our base path.
+    if (path.startsWith('/progress-tracker/')) {
+      return '/progress-tracker/';
+    }
+    return '/'; // Default fallback for local root directory presentation
+  };
+  const SITE_BASE_PATH = getBasePath();
 
-  // Define the Markdown files to track.
-  // The paths should be relative to the root of your MkDocs site,
-  // pointing to the *rendered HTML page* for each Markdown file.
-  const filesToTrack = [
-    { id: 'project-setup', name: 'Project Setup Tasks', path: 'project_setup/' }, // Removed leading /
-    { id: 'frontend', name: 'Frontend Development', path: 'frontend/' },     // Removed leading /
-    { id: 'backend', name: 'Backend Development', path: 'backend/' },       // Removed leading /
-  ];
+  // Define the project pages to track.
+  // This array will now be populated dynamically from search_index.json
+  let filesToTrack = [];
 
   /**
-   * Fetches the HTML content of a rendered MkDocs page.
-   * @param {string} pagePath - The relative URL path to the rendered HTML page (e.g., 'project_setup/').
-   * @returns {Promise<string>} - A promise that resolves with the HTML content.
+   * Fetches the HTML content of a generated MkDocs page.
+   * @param {string} pagePath - Relative URL path to the generated HTML page (e.g., 'project_setup/').
+   * @returns {Promise<string>} - A Promise that resolves with the file content.
    */
   async function fetchHtmlContent(pagePath) {
-    let htmlContent = '';
-    // Construct the full URL
-    const fullUrl = new URL(pagePath, window.location.href).href; // Ensures correct relative path resolution
-    
+    // MkDocs typically converts 'file.md' to 'file/' if use_directory_urls is true
+    // Or 'file.html' if use_directory_urls is false.
+    // The doc.location from search_index.json usually gives the correct relative path.
+    const fullUrl = window.location.origin + SITE_BASE_PATH + pagePath;
     try {
-      console.log(`Attempting to fetch HTML from: ${fullUrl}`); // Log the FULL URL being fetched
+      console.log(`[progress.js] Attempting to fetch HTML for: ${fullUrl}`);
       const response = await fetch(fullUrl);
 
       if (!response.ok) {
-        console.error(`Fetch failed for ${fullUrl}. Status: ${response.status} - ${response.statusText}`);
+        console.error(`[progress.js] Fetch failed for ${fullUrl}. Status: ${response.status} - ${response.statusText}`);
         return '';
       }
-
-      htmlContent = await response.text();
-      console.log(`Successfully fetched HTML for ${fullUrl}. Content starts with:`, htmlContent.substring(0, 2000) + '...');
+      const htmlContent = await response.text();
+      console.log(`[progress.js] Successfully fetched HTML for ${fullUrl}. Content starts with:`, htmlContent.substring(0, 500) + '...');
       return htmlContent;
     } catch (error) {
-      console.error(`Error during fetch operation for ${fullUrl}:`, error);
+      console.error(`[progress.js] Error during fetch operation for ${fullUrl}:`, error);
       return '';
     }
   }
 
   /**
-   * Parses HTML content to count rendered checkboxes and calculate progress.
-   * Material for MkDocs often renders task lists as <li> elements with a 'task-list-item' class
-   * and uses a 'data-checked' attribute to indicate their state.
-   * @param {string} htmlContent - The HTML string to parse.
+   * Parses the fetched HTML content to count checked checkboxes and calculate progress.
+   * This targets <li class="task-list-item"> elements and the nested checkbox's 'checked' property.
+   * @param {string} htmlContent - HTML string to be parsed.
    * @returns {{completed: number, total: number, percentage: number, progressBarSvg: string}}
    */
   function parseHtmlProgress(htmlContent) {
     if (!htmlContent) {
-      console.warn("parseHtmlProgress received empty HTML content.");
+      console.warn("[progress.js] parseHtmlProgress received empty HTML content.");
       return { completed: 0, total: 0, percentage: 0, progressBarSvg: '' };
     }
 
     const parser = new DOMParser();
     const doc = parser.parseFromString(htmlContent, 'text/html');
 
-    let contentArea = doc.querySelector('.md-typeset') ||
-                      doc.querySelector('article') ||
-                      doc.body;
-
-    if (!contentArea) {
-      console.warn("Could not find a suitable content area in fetched HTML for checkbox parsing.");
-      return { completed: 0, total: 0, percentage: 0, progressBarSvg: '' };
-    }
-
     let totalCheckboxes = 0;
     let completedCheckboxes = 0;
 
-    // Get all list items. We will then filter them for task list items.
-    const allListItems = contentArea.querySelectorAll('li');
+    // Target all <li> elements with class 'task-list-item' as seen in HTML.
+    const taskListItems = doc.querySelectorAll('li.task-list-item');
 
-    allListItems.forEach(item => {
-      // Check if this list item is a task list item.
-      // Material for MkDocs typically adds 'task-list-item' class or an input checkbox directly.
+    taskListItems.forEach(item => {
       const checkboxInput = item.querySelector('input[type="checkbox"]');
-      
-      if (item.classList.contains('task-list-item') || checkboxInput) {
-        totalCheckboxes++; // This is a task item
 
-        // Check for the 'data-checked' attribute, which Material for MkDocs uses
-        if (item.getAttribute('data-checked') === 'true') {
-          completedCheckboxes++;
-        } else if (checkboxInput && checkboxInput.checked) {
-          // Fallback: if data-checked isn't present, check the standard checkbox input's 'checked' property
+      // Only count items that actually include a checkbox
+      if (checkboxInput) {
+        totalCheckboxes++;
+
+        // Use the 'checked' property to determine if it's marked
+        const isChecked = checkboxInput.checked;
+
+        if (isChecked) {
           completedCheckboxes++;
         }
       }
     });
 
-    console.log(`Parsed progress: Total=${totalCheckboxes}, Completed=${completedCheckboxes}`);
+    console.log(`[progress.js] Parsed progress: Total=${totalCheckboxes}, Completed=${completedCheckboxes}`);
 
     const percentage = totalCheckboxes === 0
       ? 0
       : Math.round((completedCheckboxes / totalCheckboxes) * 100);
 
-    // Generate SVG for the progress bar
+    // Generate an SVG progress bar
     const progressBarSvg = `
       <svg width="100%" height="20" class="rounded-full bg-gray-200">
         <rect width="${percentage}%" height="20" fill="#4CAF50" class="rounded-full"></rect>
@@ -129,12 +113,86 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   /**
-   * Renders the progress dashboard.
+   * Fetches the MkDocs search index and dynamically populates filesToTrack.
+   * This is crucial for detecting new Markdown files.
    */
-  async function renderProgressDashboard() {
-    progressContainer.innerHTML = '<p class="text-center text-gray-500">Loading progress...</p>';
+  async function populateFilesToTrack() {
+    const searchIndexUrl = window.location.origin + SITE_BASE_PATH + 'search/search_index.json';
+    try {
+      console.log(`[progress.js] Attempting to fetch search index: ${searchIndexUrl}`);
+      const response = await fetch(searchIndexUrl);
+      if (!response.ok) {
+        console.error(`[progress.js] Failed to fetch search index. Status: ${response.status} - ${response.statusText}. Ensure search plugin is enabled and MkDocs is built.`);
+        // Fallback or display error message on dashboard if fetch fails
+        progressDashboardContainer.innerHTML = `<p class="text-center text-red-500">Error loading progress: Could not fetch search index. Please check console for details.</p>`;
+        return;
+      }
+      const searchIndex = await response.json();
+      console.log("[progress.js] Search index fetched:", searchIndex);
+
+      // Filter pages that are directly under the 'docs' root
+      // and are not the 'index.md' (dashboard) page itself.
+      filesToTrack = searchIndex.docs
+        .filter(doc => {
+          // Exclude the dashboard page itself (index.md is usually 'index/' or 'index.html' in location)
+          if (doc.location === 'index/' || doc.location === 'index.md' || doc.location === 'index.html') {
+            return false;
+          }
+
+          // Check if the page is a top-level HTML page.
+          // This means its 'location' path should not contain any internal slashes (e.g., 'about/', 'contact.html')
+          // but should not be something like 'sub/page/'
+          const isTopLevelPage = !doc.location.includes('/') || (doc.location.endsWith('/') && doc.location.split('/').length <= 2);
+
+          return isTopLevelPage;
+        })
+        .map(doc => {
+          // Determine a user-friendly name. Prefer 'title' from search index.
+          // If title is missing, try to derive from location (e.g., 'newtask/' -> 'Newtask')
+          let name = doc.title;
+          if (!name) {
+            name = doc.location.replace(/\.md$/, '').replace(/\.html$/, '').replace(/\/$/, ''); // Remove .md, .html, or trailing /
+            name = name.split('/').pop(); // Get just the last part of the path
+            name = name.replace(/_/g, ' '); // Replace underscores with spaces
+            name = name.charAt(0).toUpperCase() + name.slice(1); // Capitalize first letter
+          }
+
+          return {
+            id: doc.location.replace(/\//g, '-').replace(/\.md$/, '').replace(/\.html$/, ''), // Create a unique ID
+            name: name,
+            path: doc.location, // The path from search index is usually correct for fetching
+          };
+        });
+
+      // Sort files to track alphabetically by name for consistent display
+      filesToTrack.sort((a, b) => a.name.localeCompare(b.name));
+
+      console.log("[progress.js] Dynamically populated filesToTrack:", filesToTrack);
+
+    } catch (error) {
+      console.error(`[progress.js] Error fetching or parsing search index:`, error);
+      progressDashboardContainer.innerHTML = `<p class="text-center text-red-500">Error loading progress: Failed to parse search index data. Check console.</p>`;
+    }
+  }
+
+  /**
+   * Builds the consolidated progress dashboard on the index page.
+   */
+  async function renderConsolidatedDashboard() {
+    progressDashboardContainer.innerHTML = '<p class="text-center text-gray-500">Loading task progress...</p>';
+
+    // First, populate filesToTrack dynamically
+    await populateFilesToTrack();
+
     const allProgressData = [];
 
+    // Only proceed if filesToTrack was successfully populated
+    if (filesToTrack.length === 0) {
+      progressDashboardContainer.innerHTML = '<p class="text-center text-gray-500">No other tracked pages found (excluding this dashboard page). Ensure your Markdown files are in the `docs/` root and listed in `mkdocs.yml` nav.</p>';
+      return;
+    }
+
+    // Process each dynamically found file
     for (const file of filesToTrack) {
       const htmlContent = await fetchHtmlContent(file.path);
       const progress = parseHtmlProgress(htmlContent);
@@ -142,14 +200,14 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     // Clear loading message
-    progressContainer.innerHTML = '';
+    progressDashboardContainer.innerHTML = '';
 
     if (allProgressData.length === 0) {
-      progressContainer.innerHTML = '<p class="text-center text-gray-500">No progress data found or failed to load.</p>';
+      progressDashboardContainer.innerHTML = '<p class="text-center text-gray-500">No progress data found or failed to load for tracked pages.</p>';
       return;
     }
 
-    // Render each file's progress
+    // Create progress card for each file
     allProgressData.forEach(data => {
       const fileCard = document.createElement('div');
       fileCard.className = 'border border-gray-200 rounded-lg p-4 bg-white shadow-sm mb-4';
@@ -163,15 +221,17 @@ document.addEventListener('DOMContentLoaded', () => {
         </div>
         ${data.progressBarSvg}
       `;
-      progressContainer.appendChild(fileCard);
+      progressDashboardContainer.appendChild(fileCard);
     });
   }
 
-  // Add Tailwind CSS for styling (if not already included by MkDocs theme)
+  // Inject Tailwind CSS for styling (if not already included by the MkDocs theme)
+  // This might be redundant if your theme already includes Tailwind or you pre-compile it.
+  // Consider removing if you encounter issues or it's not needed.
   const tailwindScript = document.createElement('script');
   tailwindScript.src = 'https://cdn.tailwindcss.com';
   document.head.appendChild(tailwindScript);
 
-  // Initial render
-  renderProgressDashboard();
+  // Render the consolidated progress dashboard
+  renderConsolidatedDashboard();
 });

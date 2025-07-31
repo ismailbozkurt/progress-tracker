@@ -1,9 +1,9 @@
 # Project Progress Dashboard
 
-Welcome to the project progress tracker! Below you'll find the status of various development areas.
+> Welcome to the progress tracker! This is my achievement progress tracker for things in my mind.
 
 <div id="progress-dashboard-container">
   Loading project progress...
 </div>
 
-This section will be dynamically populated by JavaScript.
+[Back To The Blog](https://ismailbozkurt.github.io)

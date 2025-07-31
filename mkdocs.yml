@@ -1,19 +1,59 @@
 site_name: My Project Progress Tracker
 site_url: https://ismailbozkurt.github.io/progress-tracker/
-
 repo_url: https://github.com/ismailbozkurt/progress-tracker/
-edit_uri: blob/main/docs/
-nav:
-  - Home: index.md
-  - Project Setup: project_setup.md
-  - Frontend: frontend.md
-  - Backend: backend.md
 
-# Theme configuration (you can use any theme, 'material' is popular)
+edit_uri: blob/main/docs/
+
 theme:
   name: material
-  custom_dir: overrides # This is where we'll put our custom JS
+  color_mode: auto
+  user_color_mode_toggle: true
+  icon:
+    repo: fontawesome/brands/github
+  palette:
+    # Palette toggle for light mode
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      toggle:
+        icon: material/brightness-7
+        name: Switch to dark mode
 
-# Extra JavaScript file to include
+    # Palette toggle for dark mode
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      toggle:
+        icon: material/brightness-4
+        name: Switch to light mode
+
+  features:
+    - content.code.copy
+    - content.action.edit
+    - content.action.view
+    - content.tooltips
+    - navigation.tracking
+    - navigation.top
+    - search.share
+    - search.suggest
+
 extra_javascript:
-  - javascript/progress.js # Path relative to your docs_dir
+  - javascript/progress.js
+  - javascript/individual-progress.js
+
+markdown_extensions:
+  - def_list
+  - pymdownx.tasklist:
+      custom_checkbox: true
+  - tables
+  - admonition
+  - pymdownx.details
+  - pymdownx.superfences
+  - pymdownx.highlight:
+      anchor_linenums: true
+  - pymdownx.inlinehilite
+  - pymdownx.snippets
+  - attr_list
+  - pymdownx.emoji:
+      emoji_index: !!python/name:material.extensions.emoji.twemoji
+      emoji_generator: !!python/name:material.extensions.emoji.to_svg
+  - pymdownx.tasklist:
+      # clickable_checkbox: true
